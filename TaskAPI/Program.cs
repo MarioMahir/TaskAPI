@@ -4,9 +4,9 @@ using TaskAPI.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseInMemoryDatabase("TasksDb"));
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("TaskConnection")));
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
