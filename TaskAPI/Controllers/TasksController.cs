@@ -1,6 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskAPI.Data;
+using TaskAPI.Models;
+using TaskAPI.Helpers;
+using static TaskAPI.Helpers.TaskDelegates;
 using ModelTask = TaskAPI.Models.Task<string>;
 
 namespace TaskAPI.Controllers
@@ -13,11 +16,15 @@ namespace TaskAPI.Controllers
         public TasksController(AppDbContext db) => _db = db;
 
         [HttpGet]
-        public async System.Threading.Tasks.Task<ActionResult<IEnumerable<ModelTask>>> GetAll()
+        public async System.Threading.Tasks.Task<ActionResult<IEnumerable<Models.Task<string>>>> GetPendientes()
         {
-            var tasks = await _db.Tasks.ToListAsync();
-            return Ok(tasks);
+            var tareasPendientes = await _db.Tasks
+                .Where(t => new Func<bool>(() => !t.IsCompleted)())
+                .ToListAsync();
+
+            return tareasPendientes;
         }
+
 
         [HttpGet("{id}")]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Get(int id)
@@ -30,14 +37,20 @@ namespace TaskAPI.Controllers
         [HttpPost]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Create(ModelTask model)
         {
-            if (string.IsNullOrWhiteSpace(model.Description))
-                throw new InvalidOperationException("La descripción es obligatoria");
+            ValidarTarea<string> validar = t =>
+                !string.IsNullOrWhiteSpace(t.Description) && t.DueDate > DateTime.UtcNow;
 
-            if (model.DueDate <= DateTime.UtcNow)
-                throw new InvalidOperationException("La fecha debe ser futura");
+            if (!validar(model))
+                return BadRequest(new { error = "Descripción vacía o fecha no válida." });
+
+            NotificarCreacion(model);
 
             _db.Tasks.Add(model);
             await _db.SaveChangesAsync();
+
+            var dias = DiasRestantes(model.DueDate);
+            Console.WriteLine($"La tarea vence en {dias} días.");
+
             return CreatedAtAction(nameof(Get), new { id = model.Id }, model);
         }
 
@@ -60,7 +73,10 @@ namespace TaskAPI.Controllers
 
             _db.Tasks.Remove(t);
             await _db.SaveChangesAsync();
+            Console.WriteLine($"[NOTIFICACIÓN] La tarea con ID {id} ha sido eliminada exitosamente.");
+
             return NoContent();
         }
+        
     }
 }
