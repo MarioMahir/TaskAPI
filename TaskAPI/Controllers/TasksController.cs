@@ -4,7 +4,9 @@ using TaskAPI.Data;
 using TaskAPI.Models;
 using TaskAPI.Helpers;
 using static TaskAPI.Helpers.TaskDelegates;
-using ModelTask = TaskAPI.Models.Task<string>;
+using ModelTask = TaskAPI.Models.Task;
+using TaskAPI.Factory;
+using TaskFactory = TaskAPI.Factory.TaskFactory;
 
 namespace TaskAPI.Controllers
 {
@@ -16,7 +18,7 @@ namespace TaskAPI.Controllers
         public TasksController(AppDbContext db) => _db = db;
 
         [HttpGet]
-        public async System.Threading.Tasks.Task<ActionResult<IEnumerable<Models.Task<string>>>> GetPendientes()
+        public async System.Threading.Tasks.Task<ActionResult<IEnumerable<Models.Task>>> GetPendientes()
         {
             var tareasPendientes = await _db.Tasks
                 .Where(t => new Func<bool>(() => !t.IsCompleted)())
@@ -34,14 +36,22 @@ namespace TaskAPI.Controllers
             return Ok(t);
         }
 
-        [HttpPost]
+        [HttpPost("factory")]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Create(ModelTask model)
         {
             ValidarTarea<string> validar = t =>
                 !string.IsNullOrWhiteSpace(t.Description) && t.DueDate > DateTime.UtcNow;
 
-            if (!validar(model))
-                return BadRequest(new { error = "Descripción vacía o fecha no válida." });
+            ModelTask tarea;
+
+            try
+            {
+                tarea = TaskFactory.CreateNormalTask(model.Description, model.DueDate, validar);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
 
             NotificarCreacion(model);
 

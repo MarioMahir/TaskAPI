@@ -7,6 +7,6 @@ namespace TaskAPI.Data
     {
         public AppDbContext(DbContextOptions opts) : base(opts) { }
 
-        public DbSet<Models.Task<string>> Tasks { get; set; }
+        public DbSet<Models.Task> Tasks { get; set; }
     }
 }
