@@ -7,6 +7,7 @@ using static TaskAPI.Helpers.TaskDelegates;
 using ModelTask = TaskAPI.Models.Task;
 using TaskAPI.Factory;
 using TaskFactory = TaskAPI.Factory.TaskFactory;
+using TaskAPI.Services;
 
 namespace TaskAPI.Controllers
 {
@@ -15,7 +16,12 @@ namespace TaskAPI.Controllers
     public class TasksController : ControllerBase
     {
         private readonly AppDbContext _db;
-        public TasksController(AppDbContext db) => _db = db;
+        private readonly TaskQueueService _taskQueue;
+        public TasksController(AppDbContext db, TaskQueueService taskQueue)
+        {
+            _db = db;
+            _taskQueue = taskQueue;
+        }
 
         [HttpGet]
         public async System.Threading.Tasks.Task<ActionResult<IEnumerable<Models.Task>>> GetPendientes()
@@ -86,6 +92,28 @@ namespace TaskAPI.Controllers
             Console.WriteLine($"[NOTIFICACIÓN] La tarea con ID {id} ha sido eliminada exitosamente.");
 
             return NoContent();
+        }
+
+        [HttpPost("queue")]
+        public async System.Threading.Tasks.Task<IActionResult> AddToQueue(ModelTask model)
+        {
+            if (string.IsNullOrWhiteSpace(model.Description))
+                return BadRequest("Descripción inválida");
+
+            _db.Tasks.Add(model);
+            await _db.SaveChangesAsync();
+
+            _taskQueue.EnqueueTask(model);
+
+            return Ok(new { message = "Tarea encolada exitosamente" });
+
+        }
+
+        [HttpGet("queue/status")]
+        public IActionResult GetQueueStatus()
+        {
+            int cantidad = _taskQueue.PendingCount;
+            return Ok(new { pendientes = cantidad });
         }
         
     }
