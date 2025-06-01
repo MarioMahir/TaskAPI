@@ -16,11 +16,19 @@ namespace TaskAPI.Controllers
     public class TasksController : ControllerBase
     {
         private readonly AppDbContext _db;
+        private readonly Func<DateTime, int> _diasRestantesMemo;
         private readonly TaskQueueService _taskQueue;
+
+        public int DiasRestantes(DateTime dueDate)
+        {
+            return (dueDate - DateTime.UtcNow).Days;
+        }
+
         public TasksController(AppDbContext db, TaskQueueService taskQueue)
         {
             _db = db;
             _taskQueue = taskQueue;
+            _diasRestantesMemo = Memoizer.Memoize<DateTime, int>(DiasRestantes);
         }
 
         [HttpGet]
@@ -64,7 +72,7 @@ namespace TaskAPI.Controllers
             _db.Tasks.Add(model);
             await _db.SaveChangesAsync();
 
-            var dias = DiasRestantes(model.DueDate);
+            var dias = _diasRestantesMemo(model.DueDate);
             Console.WriteLine($"La tarea vence en {dias} días.");
 
             return CreatedAtAction(nameof(Get), new { id = model.Id }, model);
