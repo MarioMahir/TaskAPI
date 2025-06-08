@@ -8,6 +8,7 @@ using ModelTask = TaskAPI.Models.Task;
 using TaskAPI.Factory;
 using TaskFactory = TaskAPI.Factory.TaskFactory;
 using TaskAPI.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace TaskAPI.Controllers
 {
@@ -19,6 +20,7 @@ namespace TaskAPI.Controllers
         private readonly Func<DateTime, int> _diasRestantesMemo;
         private readonly TaskQueueService _taskQueue;
 
+        [NonAction]
         public int DiasRestantes(DateTime dueDate)
         {
             return (dueDate - DateTime.UtcNow).Days;
@@ -41,7 +43,7 @@ namespace TaskAPI.Controllers
             return tareasPendientes;
         }
 
-
+        [Authorize]
         [HttpGet("{id}")]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Get(int id)
         {
