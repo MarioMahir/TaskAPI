@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using TaskAPI.Data;
+using TaskAPI.Hubs;
 using TaskAPI.Middleware;
 using TaskAPI.Services;
 
@@ -64,7 +65,13 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+builder.Services.AddSignalR();
+
 var app = builder.Build();
+
+app.UseRouting();
+
+app.MapHub<TaskHub>(TaskHub.HUB_ENDPOINT);
 
 var taskQueue = app.Services.GetRequiredService<TaskQueueService>();
 taskQueue.TaskProcessed.Subscribe(task =>
@@ -80,11 +87,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

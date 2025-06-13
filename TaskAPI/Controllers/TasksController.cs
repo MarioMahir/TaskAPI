@@ -9,6 +9,8 @@ using TaskAPI.Factory;
 using TaskFactory = TaskAPI.Factory.TaskFactory;
 using TaskAPI.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using TaskAPI.Hubs;
 
 namespace TaskAPI.Controllers
 {
@@ -19,6 +21,7 @@ namespace TaskAPI.Controllers
         private readonly AppDbContext _db;
         private readonly Func<DateTime, int> _diasRestantesMemo;
         private readonly TaskQueueService _taskQueue;
+        private readonly IHubContext<TaskHub> _hub;
 
         [NonAction]
         public int DiasRestantes(DateTime dueDate)
@@ -26,11 +29,12 @@ namespace TaskAPI.Controllers
             return (dueDate - DateTime.UtcNow).Days;
         }
 
-        public TasksController(AppDbContext db, TaskQueueService taskQueue)
+        public TasksController(AppDbContext db, TaskQueueService taskQueue, IHubContext<TaskHub> hub)
         {
             _db = db;
             _taskQueue = taskQueue;
             _diasRestantesMemo = Memoizer.Memoize<DateTime, int>(DiasRestantes);
+            _hub = hub;
         }
 
         [HttpGet]
@@ -73,6 +77,7 @@ namespace TaskAPI.Controllers
 
             _db.Tasks.Add(model);
             await _db.SaveChangesAsync();
+            await _hub.Clients.All.SendAsync("Tarea Creada", model);
 
             var dias = _diasRestantesMemo(model.DueDate);
             Console.WriteLine($"La tarea vence en {dias} días.");

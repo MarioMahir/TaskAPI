@@ -1,0 +1,39 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>SignalR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+</head>
+<body>
+    <h2>Conexión con SignalR.</h2>
+    <ul id="log"></ul>
+
+    <script>
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("https://localhost:7153/taskhub")
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+        connection.on("NuevaTarea", (tarea) => {
+            const log = document.getElementById("log");
+            const item = document.createElement("li");
+            item.textContent = `Nueva tarea: ${tarea.description} (vence el ${tarea.dueDate})`;
+            log.appendChild(item);
+        });
+
+        async function startConnection() {
+            try {
+                await connection.start();
+                console.log("Conectado a SignalR");
+            } catch (err) {
+                console.error("Error al conectar:", err);
+                setTimeout(startConnection, 3000); 
+            }
+        }
+
+        connection.onclose(startConnection);
+        startConnection();
+    </script>
+</body>
+</html>
