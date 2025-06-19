@@ -73,16 +73,16 @@ namespace TaskAPI.Controllers
                 return BadRequest(new { error = ex.Message });
             }
 
-            NotificarCreacion(model);
+            NotificarCreacion(tarea);
 
-            _db.Tasks.Add(model);
+            _db.Tasks.Add(tarea);
             await _db.SaveChangesAsync();
-            await _hub.Clients.All.SendAsync("Tarea Creada", model);
+            await _hub.Clients.All.SendAsync("Tarea Creada", tarea);
 
             var dias = _diasRestantesMemo(model.DueDate);
             Console.WriteLine($"La tarea vence en {dias} días.");
 
-            return CreatedAtAction(nameof(Get), new { id = model.Id }, model);
+            return CreatedAtAction(nameof(Get), new { id = tarea.Id }, tarea);
         }
 
         [HttpPut("{id}")]
@@ -90,6 +90,15 @@ namespace TaskAPI.Controllers
         {
             if (id != model.Id)
                 return BadRequest(new { error = "Id de ruta o body distinto" });
+
+            var existingTask = await _db.Tasks.FindAsync(id);
+            if (existingTask == null)
+                return NotFound("Tarea no encontrada");
+
+            existingTask.Description = model.Description;
+            existingTask.DueDate = model.DueDate;
+            existingTask.IsCompleted = model.IsCompleted;
+            existingTask.ExtraData = model.ExtraData;
 
             _db.Entry(model).State = EntityState.Modified;
             await _db.SaveChangesAsync();

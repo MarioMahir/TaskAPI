@@ -20,39 +20,61 @@ namespace TaskAPI.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _config;
-        private readonly AppDbContext _context;
+        private readonly AppDbContext _db;
 
-        public AuthController(IConfiguration config, AppDbContext context)
+        public AuthController(IConfiguration config, AppDbContext db)
         {
             _config = config;
-            _context = context;
+            _db = db;
+        }
+
+        [HttpPost("register")]
+        public IActionResult Register([FromBody] User user)
+        {
+            if (_db.Users.Any(u => u.Correo == user.Correo))
+                return BadRequest("Correo ya registrado.");
+
+            _db.Users.Add(user);
+            _db.SaveChanges();
+            return Ok("Usuario registrado.");
         }
 
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginModel login)
         {
-            var user = _context.Tasks.FirstOrDefault(u => u.Description == login.Correo);
-            if (user == null || login.Password != "MarioSabala")
+            var user = _db.Users.FirstOrDefault(u => u.Correo == login.Correo && u.Password == login.Password);
+            if (user == null)
                 return Unauthorized("Credenciales inválidas");
+
+            var token = GenerateToken(user);
+            return Ok(new { token });
+        }
+
+        private string GenerateToken(User user)
+        {
+            var jwtSettings = _config.GetSection("JwtSettings");
+            var secretKey = jwtSettings["Key"];
+            var issuer = jwtSettings["Issuer"];
+            var audience = jwtSettings["Audience"];
 
             var claims = new[]
             {
-            new Claim(JwtRegisteredClaimNames.Sub, login.Correo),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
+                new Claim(JwtRegisteredClaimNames.Sub, user.Correo),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["JwtSettings:Key"]));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
-                issuer: _config["JwtSettings:Issuer"],
-                audience: _config["JwtSettings:Audience"],
+                issuer: issuer,
+                audience: audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(1),
+                expires: DateTime.Now.AddMinutes(50),
                 signingCredentials: creds
             );
 
-            return Ok(new { token = new JwtSecurityTokenHandler().WriteToken(token) });
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }

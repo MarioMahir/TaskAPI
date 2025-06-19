@@ -5,6 +5,7 @@ using Microsoft.OpenApi.Models;
 using System.Text;
 using TaskAPI.Data;
 using TaskAPI.Hubs;
+using Microsoft.AspNetCore.SignalR;
 using TaskAPI.Middleware;
 using TaskAPI.Services;
 
@@ -69,14 +70,18 @@ builder.Services.AddSignalR();
 
 var app = builder.Build();
 
+var hubContext = app.Services.GetRequiredService<IHubContext<TaskHub>>();
+
 app.UseRouting();
 
 app.MapHub<TaskHub>(TaskHub.HUB_ENDPOINT);
 
 var taskQueue = app.Services.GetRequiredService<TaskQueueService>();
-taskQueue.TaskProcessed.Subscribe(task =>
+taskQueue.TaskProcessed.Subscribe(async task =>
 {
-    Console.WriteLine($"Procesada la tarea con ID {{task.Id}} y descripción: {{task.Description}}");
+    Console.WriteLine($"[EVENTO] Procesada la tarea con ID {{task.Id}} y descripción: {{task.Description}}");
+
+    await hubContext.Clients.All.SendAsync("Tarea Procesada", task);
 });
 
 if (app.Environment.IsDevelopment())
