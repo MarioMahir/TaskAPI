@@ -47,7 +47,6 @@ namespace TaskAPI.Controllers
             return tareasPendientes;
         }
 
-        [Authorize]
         [HttpGet("{id}")]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Get(int id)
         {
@@ -88,6 +87,9 @@ namespace TaskAPI.Controllers
         [HttpPut("{id}")]
         public async System.Threading.Tasks.Task<IActionResult> Update(int id, ModelTask model)
         {
+            if (model == null)
+                return BadRequest(new { error = "Model no puede ser nulo" });
+
             if (id != model.Id)
                 return BadRequest(new { error = "Id de ruta o body distinto" });
 
@@ -98,9 +100,8 @@ namespace TaskAPI.Controllers
             existingTask.Description = model.Description;
             existingTask.DueDate = model.DueDate;
             existingTask.IsCompleted = model.IsCompleted;
-            existingTask.ExtraData = model.ExtraData;
+            existingTask.ExtraData = model.ExtraData ?? "";
 
-            _db.Entry(model).State = EntityState.Modified;
             await _db.SaveChangesAsync();
             return NoContent();
         }
@@ -108,6 +109,8 @@ namespace TaskAPI.Controllers
         [HttpDelete("{id}")]
         public async System.Threading.Tasks.Task<IActionResult> Delete(int id)
         {
+            if (id <= 0) return BadRequest(new { error = "Id inválido" });
+
             var t = await _db.Tasks.FindAsync(id);
             if (t == null) return NotFound(new { error = "Tarea no encontrada" });
 
@@ -136,7 +139,7 @@ namespace TaskAPI.Controllers
         [HttpGet("queue/status")]
         public IActionResult GetQueueStatus()
         {
-            int cantidad = _taskQueue.PendingCount;
+            int cantidad = _taskQueue.GetPendingCount();
             return Ok(new { pendientes = cantidad });
         }
         

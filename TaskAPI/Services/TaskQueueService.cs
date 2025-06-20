@@ -1,39 +1,38 @@
-﻿using System.Reactive.Subjects;
+﻿using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using TaskAPI.Models;
 
 namespace TaskAPI.Services
 {
     public class TaskQueueService
     {
-        private readonly Queue<Models.Task> _taskQueue = new();
-        private bool _isProcessing = false;
+        private readonly Subject<Models.Task> _taskSubject = new();
+        private readonly BehaviorSubject<int> _pendingCount = new(0);
         private readonly Subject<Models.Task> _taskProcessed = new();
 
-        public IObservable<Models.Task> TaskProcessed => _taskProcessed;
+        public IObservable<Models.Task> TaskProcessed => _taskProcessed.AsObservable();
 
-        public void EnqueueTask(Models.Task task)
+        public TaskQueueService()
         {
-            _taskQueue.Enqueue(task);
-            ProcessQueue();
+            _taskSubject
+                .Do(_ => _pendingCount.OnNext(_pendingCount.Value + 1)) // Aumenta contador al recibir nueva tarea
+                .SelectMany(async task =>
+                {
+                    await System.Threading.Tasks.Task.Delay(2000); // Simula procesamiento
+                    return task;
+                })
+                .Do(_ => _pendingCount.OnNext(_pendingCount.Value - 1)) // Disminuye contador
+                .Subscribe(task =>
+                {
+                    _taskProcessed.OnNext(task);
+                });
         }
 
-        private async void ProcessQueue()
+        public void EnqueueTask(TaskAPI.Models.Task task)
         {
-            if (_isProcessing || _taskQueue.Count == 0)
-                return;
-
-            _isProcessing = true;
-
-            var taskToProcess = _taskQueue.Dequeue();
-
-            await System.Threading.Tasks.Task.Delay(2000);
-
-            _taskProcessed.OnNext(taskToProcess);
-            _isProcessing = false;
-
-            ProcessQueue();
+            _taskSubject.OnNext(task);
         }
 
-        public int PendingCount => _taskQueue.Count;
+        public int GetPendingCount() => _pendingCount.Value;
     }
 }

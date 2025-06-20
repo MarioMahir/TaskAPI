@@ -67,10 +67,10 @@ namespace TaskAPI.Controllers
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
-                issuer: issuer,
-                audience: audience,
+                issuer: jwtSettings["Issuer"],
+                audience: jwtSettings["Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddMinutes(50),
+                expires: DateTime.UtcNow.AddHours(1),
                 signingCredentials: creds
             );
 

@@ -43,9 +43,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["Key"];
-
-if (string.IsNullOrEmpty(secretKey))
-    throw new Exception("La clave secreta JWT no está configurada.");
+var issuer = jwtSettings["Issuer"];
+var audience = jwtSettings["Audience"];
 
 builder.Services.AddAuthentication(options =>
 {
@@ -60,9 +59,18 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = issuer,
+        ValidAudience = audience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"[JWT ERROR]: {context.Exception.Message}");
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -79,7 +87,7 @@ app.MapHub<TaskHub>(TaskHub.HUB_ENDPOINT);
 var taskQueue = app.Services.GetRequiredService<TaskQueueService>();
 taskQueue.TaskProcessed.Subscribe(async task =>
 {
-    Console.WriteLine($"[EVENTO] Procesada la tarea con ID {{task.Id}} y descripción: {{task.Description}}");
+    Console.WriteLine($"[EVENTO] Procesada la tarea con ID {task.Id} y descripción: {task.Description}");
 
     await hubContext.Clients.All.SendAsync("Tarea Procesada", task);
 });
