@@ -76,7 +76,17 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddSignalR();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowMe", policy =>
+    policy.WithOrigins("http://localhost:9095")
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
+
 var app = builder.Build();
+
+app.UseCors("AllowMe");
 
 var hubContext = app.Services.GetRequiredService<IHubContext<TaskHub>>();
 
