@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -37,7 +37,7 @@ namespace TaskAPI.Tests
         public async Task DeleteTaskSuccessfully()
         {
             var dbContext = await DeleteTask();
-            var controller = new TasksController(dbContext, null, null);
+            var controller = new TasksController(dbContext, null!, null!);
 
             var taskToDelete = await dbContext.Tasks.FirstAsync();
 

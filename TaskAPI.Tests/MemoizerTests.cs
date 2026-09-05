@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using TaskAPI.Helpers;
 using Xunit;
 

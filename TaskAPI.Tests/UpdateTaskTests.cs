@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -38,7 +38,7 @@ namespace TaskAPI.Tests
             {
 
                 var dbContext = await UpdateTask();
-                var controller = new TasksController(dbContext, null, null);
+                var controller = new TasksController(dbContext, null!, null!);
 
                 var existingTask = await dbContext.Tasks.FirstAsync();
                 var updatedTask = new TaskAPI.Models.Task
@@ -55,9 +55,9 @@ namespace TaskAPI.Tests
                 Assert.IsType<NoContentResult>(result);
 
                 var taskInDb = await dbContext.Tasks.FindAsync(existingTask.Id);
-                Assert.Equal("Tarea actualizada", taskInDb.Description);
-                Assert.True(taskInDb.IsCompleted);
-                Assert.Equal("Actualizado", taskInDb.ExtraData);
+                Assert.Equal("Tarea actualizada", taskInDb!.Description);
+                Assert.True(taskInDb!.IsCompleted);
+                Assert.Equal("Actualizado", taskInDb!.ExtraData);
             }
         }
     }

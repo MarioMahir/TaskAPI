@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using TaskAPI.Factory;
 using TaskAPI.Models;
 using TaskAPI.Helpers;
