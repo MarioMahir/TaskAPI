@@ -1,8 +1,13 @@
-﻿namespace TaskAPI.Models
+using System.ComponentModel.DataAnnotations;
+
+namespace TaskAPI.Models
 {
     public class LoginModel
     {
-        public string Correo { get; set; }
-        public string Password { get; set; }
+        [Required, EmailAddress]
+        public string Correo { get; set; } = "";
+
+        [Required]
+        public string Password { get; set; } = "";
     }
 }

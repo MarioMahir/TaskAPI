@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace TaskAPI.Models
 {
@@ -7,9 +7,10 @@ namespace TaskAPI.Models
         public int Id { get; set; }
 
         [Required]
-        public string Correo { get; set; }
+        public string Correo { get; set; } = "";
 
+        /// <summary>Hash de la contraseña (PasswordHasher). Nunca se guarda en texto plano.</summary>
         [Required]
-        public string Password { get; set; }
+        public string Password { get; set; } = "";
     }
 }

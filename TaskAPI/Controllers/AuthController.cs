@@ -1,17 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using TaskAPI.Data;
-using TaskAPI.Factory;
-using TaskAPI.Helpers;
 using TaskAPI.Models;
-using TaskAPI.Services;
-using static TaskAPI.Helpers.TaskDelegates;
-using ModelTask = TaskAPI.Models.Task;
-using TaskFactory = TaskAPI.Factory.TaskFactory;
 
 namespace TaskAPI.Controllers
 {
@@ -21,6 +15,7 @@ namespace TaskAPI.Controllers
     {
         private readonly IConfiguration _config;
         private readonly AppDbContext _db;
+        private readonly PasswordHasher<User> _hasher = new();
 
         public AuthController(IConfiguration config, AppDbContext db)
         {
@@ -29,33 +24,52 @@ namespace TaskAPI.Controllers
         }
 
         [HttpPost("register")]
-        public IActionResult Register([FromBody] User user)
+        public IActionResult Register([FromBody] LoginModel model)
         {
-            if (_db.Users.Any(u => u.Correo == user.Correo))
-                return BadRequest("Correo ya registrado.");
+            if (string.IsNullOrWhiteSpace(model.Correo) || string.IsNullOrWhiteSpace(model.Password))
+                return BadRequest(new { error = "Correo y contraseña son obligatorios." });
+
+            if (model.Password.Length < 6)
+                return BadRequest(new { error = "La contraseña debe tener al menos 6 caracteres." });
+
+            var correo = model.Correo.Trim().ToLowerInvariant();
+
+            if (_db.Users.Any(u => u.Correo == correo))
+                return BadRequest(new { error = "Correo ya registrado." });
+
+            var user = new User { Correo = correo };
+            user.Password = _hasher.HashPassword(user, model.Password);
 
             _db.Users.Add(user);
             _db.SaveChanges();
-            return Ok("Usuario registrado.");
+
+            return Ok(new { message = "Usuario registrado." });
         }
 
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginModel login)
         {
-            var user = _db.Users.FirstOrDefault(u => u.Correo == login.Correo && u.Password == login.Password);
-            if (user == null)
-                return Unauthorized("Credenciales inválidas");
+            var correo = (login.Correo ?? "").Trim().ToLowerInvariant();
+            var user = _db.Users.FirstOrDefault(u => u.Correo == correo);
+
+            if (user == null || !VerificarPassword(user, login.Password ?? ""))
+                return Unauthorized(new { error = "Credenciales inválidas" });
 
             var token = GenerateToken(user);
             return Ok(new { token });
         }
 
+        private bool VerificarPassword(User user, string password)
+        {
+            var resultado = _hasher.VerifyHashedPassword(user, user.Password, password);
+            return resultado != PasswordVerificationResult.Failed;
+        }
+
         private string GenerateToken(User user)
         {
             var jwtSettings = _config.GetSection("JwtSettings");
-            var secretKey = jwtSettings["Key"];
-            var issuer = jwtSettings["Issuer"];
-            var audience = jwtSettings["Audience"];
+            var secretKey = jwtSettings["Key"]
+                ?? throw new InvalidOperationException("JwtSettings:Key no está configurada.");
 
             var claims = new[]
             {
