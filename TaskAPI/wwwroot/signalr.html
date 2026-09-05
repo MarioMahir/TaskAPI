@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TaskAPI · SignalR en vivo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <style>
+        body { font-family: "Segoe UI", sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; background: #0f1c2e; color: #e6f1ff; }
+        h1 { color: #66c0f4; }
+        .estado { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 13px; background: #444; }
+        .estado.ok { background: #00c853; color: #05240f; }
+        ul { list-style: none; padding: 0; }
+        li { background: #16202d; border-radius: 10px; padding: 10px 14px; margin: 8px 0; border-left: 4px solid #66c0f4; }
+        li.procesada { border-left-color: #00c853; }
+        small { color: #9bbbd4; }
+    </style>
+</head>
+<body>
+    <h1>Eventos de tareas en tiempo real</h1>
+    <p>Estado: <span id="estado" class="estado">desconectado</span></p>
+    <p><small>Crea una tarea en <code>POST /api/Tasks/factory</code> o encola una en <code>POST /api/Tasks/queue</code> desde Swagger y aparecerá aquí.</small></p>
+    <ul id="log"></ul>
+
+    <script>
+        const estado = document.getElementById("estado");
+        const log = document.getElementById("log");
+
+        // Mismo origen que la API: no depende del puerto.
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/taskHub")
+            .withAutomaticReconnect()
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+        function agregar(texto, clase) {
+            const item = document.createElement("li");
+            item.className = clase;
+            item.innerHTML = `${texto}<br><small>${new Date().toLocaleTimeString()}</small>`;
+            log.prepend(item);
+        }
+
+        connection.on("TareaCreada", t =>
+            agregar(`🆕 Tarea creada #${t.id}: ${t.description} (vence ${new Date(t.dueDate).toLocaleDateString()})`, "creada"));
+
+        connection.on("TareaProcesada", t =>
+            agregar(`✅ Tarea procesada #${t.id}: ${t.description}`, "procesada"));
+
+        connection.onreconnecting(() => { estado.textContent = "reconectando..."; estado.className = "estado"; });
+        connection.onreconnected(() => { estado.textContent = "conectado"; estado.className = "estado ok"; });
+        connection.onclose(() => { estado.textContent = "desconectado"; estado.className = "estado"; });
+
+        connection.start()
+            .then(() => { estado.textContent = "conectado"; estado.className = "estado ok"; })
+            .catch(err => { estado.textContent = "error: " + err.message; });
+    </script>
+</body>
+</html>
