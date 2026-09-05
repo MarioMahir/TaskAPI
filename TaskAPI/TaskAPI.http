@@ -1,6 +1,19 @@
 @TaskAPI_HostAddress = http://localhost:5058
 
-GET {{TaskAPI_HostAddress}}/weatherforecast/
-Accept: application/json
+### Registro
+POST {{TaskAPI_HostAddress}}/api/Auth/register
+Content-Type: application/json
+
+{ "correo": "mario@ejemplo.com", "password": "Secreta123" }
+
+### Login (copia el token de la respuesta)
+POST {{TaskAPI_HostAddress}}/api/Auth/login
+Content-Type: application/json
+
+{ "correo": "mario@ejemplo.com", "password": "Secreta123" }
+
+### Tareas (requiere token)
+GET {{TaskAPI_HostAddress}}/api/Tasks
+Authorization: Bearer {{token}}
 
 ###

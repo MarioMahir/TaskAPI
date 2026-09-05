@@ -1,4 +1,3 @@
-﻿using Microsoft.AspNetCore.Mvc.Formatters;
 using System;
 using System.Collections.Concurrent;
 
