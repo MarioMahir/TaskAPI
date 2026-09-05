@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskAPI.Data;
 using TaskAPI.Models;
@@ -16,6 +16,7 @@ namespace TaskAPI.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class TasksController : ControllerBase
     {
         private readonly AppDbContext _db;

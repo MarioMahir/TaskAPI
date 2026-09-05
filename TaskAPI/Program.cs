@@ -1,35 +1,51 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using TaskAPI.Data;
 using TaskAPI.Hubs;
-using Microsoft.AspNetCore.SignalR;
 using TaskAPI.Middleware;
 using TaskAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseSqlServer(builder.Configuration.GetConnectionString("TaskConnection")));
+// Base de datos: SQL Server por defecto; en memoria si "UseInMemoryDatabase": true
+// (útil para probar la API sin instalar SQL Server).
+if (builder.Configuration.GetValue<bool>("UseInMemoryDatabase"))
+{
+    builder.Services.AddDbContext<AppDbContext>(opt => opt.UseInMemoryDatabase("TaskAPIDb"));
+}
+else
+{
+    builder.Services.AddDbContext<AppDbContext>(opt =>
+        opt.UseSqlServer(builder.Configuration.GetConnectionString("TaskConnection")));
+}
+
 builder.Services.AddControllers();
 builder.Services.AddSingleton<TaskQueueService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "Task API", Version = "v1" });
-
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Description = "Autenticaci�n JWT.",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Title = "Task API",
+        Version = "v1",
+        Description = "API de tareas con JWT, SignalR y cola reactiva. Regístrate en /api/Auth/register, haz login y usa el botón Authorize con el token."
     });
 
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "Pega solo el token JWT (sin la palabra Bearer).",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
             new OpenApiSecurityScheme
@@ -41,10 +57,18 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// JWT: la clave viene de user-secrets o variables de entorno, nunca del repositorio.
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["Key"];
 var issuer = jwtSettings["Issuer"];
 var audience = jwtSettings["Audience"];
+
+if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Length < 32)
+{
+    throw new InvalidOperationException(
+        "JwtSettings:Key no está configurada o es muy corta (mínimo 32 caracteres). " +
+        "Configúrala con: dotnet user-secrets set \"JwtSettings:Key\" \"<clave-larga>\" --project TaskAPI");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -53,7 +77,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
@@ -79,27 +103,20 @@ builder.Services.AddSignalR();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowMe", policy =>
-    policy.WithOrigins("http://localhost:9095")
-            .AllowAnyHeader()
-            .AllowAnyMethod());
+        policy.WithOrigins("http://localhost:9095", "http://localhost:5058", "https://localhost:7153")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
 var app = builder.Build();
 
-app.UseCors("AllowMe");
-
+// Cuando una tarea sale de la cola, se avisa por consola y por SignalR a todos los clientes.
 var hubContext = app.Services.GetRequiredService<IHubContext<TaskHub>>();
-
-app.UseRouting();
-
-app.MapHub<TaskHub>(TaskHub.HUB_ENDPOINT);
-
 var taskQueue = app.Services.GetRequiredService<TaskQueueService>();
 taskQueue.TaskProcessed.Subscribe(async task =>
 {
-    Console.WriteLine($"[EVENTO] Procesada la tarea con ID {task.Id} y descripci�n: {task.Description}");
-
-    await hubContext.Clients.All.SendAsync("Tarea Procesada", task);
+    Console.WriteLine($"[EVENTO] Procesada la tarea con ID {task.Id} y descripción: {task.Description}");
+    await hubContext.Clients.All.SendAsync("TareaProcesada", task);
 });
 
 if (app.Environment.IsDevelopment())
@@ -112,9 +129,15 @@ app.UseHttpsRedirection();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
+app.UseRouting();
+app.UseCors("AllowMe");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseStaticFiles();
+
 app.MapControllers();
+app.MapHub<TaskHub>(TaskHub.HUB_ENDPOINT);
 
 app.Run();

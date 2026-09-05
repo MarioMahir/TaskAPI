@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>taskapi-2e9c1f4a-7b3d-4c2a-9f1e-5d8a6b7c9e01</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
