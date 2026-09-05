@@ -1,16 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using TaskAPI.Data;
-using TaskAPI.Models;
 using TaskAPI.Helpers;
+using TaskAPI.Hubs;
+using TaskAPI.Services;
 using static TaskAPI.Helpers.TaskDelegates;
 using ModelTask = TaskAPI.Models.Task;
-using TaskAPI.Factory;
 using TaskFactory = TaskAPI.Factory.TaskFactory;
-using TaskAPI.Services;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.SignalR;
-using TaskAPI.Hubs;
 
 namespace TaskAPI.Controllers
 {
@@ -24,11 +22,9 @@ namespace TaskAPI.Controllers
         private readonly TaskQueueService _taskQueue;
         private readonly IHubContext<TaskHub> _hub;
 
-        [NonAction]
-        public int DiasRestantes(DateTime dueDate)
-        {
-            return (dueDate - DateTime.UtcNow).Days;
-        }
+        // Misma regla para crear, encolar y actualizar: descripción obligatoria y fecha futura.
+        private static readonly ValidarTarea<string> _validar = t =>
+            !string.IsNullOrWhiteSpace(t.Description) && t.DueDate > DateTime.UtcNow;
 
         public TasksController(AppDbContext db, TaskQueueService taskQueue, IHubContext<TaskHub> hub)
         {
@@ -38,17 +34,19 @@ namespace TaskAPI.Controllers
             _hub = hub;
         }
 
+        /// <summary>Lista las tareas. Con ?pendientes=true devuelve solo las no completadas.</summary>
         [HttpGet]
-        public async System.Threading.Tasks.Task<ActionResult<IEnumerable<Models.Task>>> GetPendientes()
+        public async System.Threading.Tasks.Task<ActionResult<IEnumerable<ModelTask>>> GetAll([FromQuery] bool pendientes = false)
         {
-            var tareasPendientes = await _db.Tasks
-                .Where(t => new Func<bool>(() => !t.IsCompleted)())
-                .ToListAsync();
+            IQueryable<ModelTask> query = _db.Tasks;
 
-            return tareasPendientes;
+            if (pendientes)
+                query = query.Where(t => !t.IsCompleted);
+
+            return await query.OrderBy(t => t.DueDate).ToListAsync();
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Get(int id)
         {
             var t = await _db.Tasks.FindAsync(id);
@@ -56,28 +54,30 @@ namespace TaskAPI.Controllers
             return Ok(t);
         }
 
+        /// <summary>Crea una tarea a través del Factory y notifica por SignalR.</summary>
         [HttpPost("factory")]
         public async System.Threading.Tasks.Task<ActionResult<ModelTask>> Create(ModelTask model)
         {
-            ValidarTarea<string> validar = t =>
-                !string.IsNullOrWhiteSpace(t.Description) && t.DueDate > DateTime.UtcNow;
-
             ModelTask tarea;
 
             try
             {
-                tarea = TaskFactory.CreateNormalTask(model.Description, model.DueDate, validar);
+                tarea = TaskFactory.CreateNormalTask(model.Description, model.DueDate, _validar);
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { error = ex.Message });
             }
 
+            tarea.ExtraData = model.ExtraData ?? "";
+
             NotificarCreacion(tarea);
 
             _db.Tasks.Add(tarea);
             await _db.SaveChangesAsync();
-            await _hub.Clients.All.SendAsync("Tarea Creada", tarea);
+
+            if (_hub != null)
+                await _hub.Clients.All.SendAsync("TareaCreada", tarea);
 
             var dias = _diasRestantesMemo(model.DueDate);
             Console.WriteLine($"La tarea vence en {dias} días.");
@@ -85,18 +85,22 @@ namespace TaskAPI.Controllers
             return CreatedAtAction(nameof(Get), new { id = tarea.Id }, tarea);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
         public async System.Threading.Tasks.Task<IActionResult> Update(int id, ModelTask model)
         {
-            if (model == null)
-                return BadRequest(new { error = "Model no puede ser nulo" });
-
             if (id != model.Id)
                 return BadRequest(new { error = "Id de ruta o body distinto" });
 
+            if (string.IsNullOrWhiteSpace(model.Description))
+                return BadRequest(new { error = "La descripción es obligatoria" });
+
             var existingTask = await _db.Tasks.FindAsync(id);
             if (existingTask == null)
-                return NotFound("Tarea no encontrada");
+                return NotFound(new { error = "Tarea no encontrada" });
+
+            // Al editar se permite una fecha pasada solo si la tarea queda marcada como completada.
+            if (!model.IsCompleted && model.DueDate <= DateTime.UtcNow)
+                return BadRequest(new { error = "La fecha límite de una tarea pendiente debe ser futura" });
 
             existingTask.Description = model.Description;
             existingTask.DueDate = model.DueDate;
@@ -107,7 +111,7 @@ namespace TaskAPI.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         public async System.Threading.Tasks.Task<IActionResult> Delete(int id)
         {
             if (id <= 0) return BadRequest(new { error = "Id inválido" });
@@ -122,19 +126,22 @@ namespace TaskAPI.Controllers
             return NoContent();
         }
 
+        /// <summary>Guarda la tarea y la manda a la cola reactiva; al procesarse se emite TareaProcesada.</summary>
         [HttpPost("queue")]
         public async System.Threading.Tasks.Task<IActionResult> AddToQueue(ModelTask model)
         {
-            if (string.IsNullOrWhiteSpace(model.Description))
-                return BadRequest("Descripción inválida");
+            if (!_validar(model))
+                return BadRequest(new { error = "La tarea necesita descripción y una fecha límite futura" });
+
+            model.Id = 0;
+            model.ExtraData ??= "";
 
             _db.Tasks.Add(model);
             await _db.SaveChangesAsync();
 
             _taskQueue.EnqueueTask(model);
 
-            return Ok(new { message = "Tarea encolada exitosamente" });
-
+            return Accepted(new { message = "Tarea encolada exitosamente", id = model.Id });
         }
 
         [HttpGet("queue/status")]
@@ -143,6 +150,5 @@ namespace TaskAPI.Controllers
             int cantidad = _taskQueue.GetPendingCount();
             return Ok(new { pendientes = cantidad });
         }
-        
     }
 }
