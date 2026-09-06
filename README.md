@@ -140,4 +140,4 @@ Cada pieza responde a una necesidad concreta: JWT para que solo usuarios registr
 
 ## Notas
 
-Proyecto de la asignatura de Programación Web con .NET, desarrollado por etapas entre mayo y junio de 2025 y revisado después para hashear contraseñas, proteger los endpoints y documentarlo.
+Proyecto de la asignatura de C#.NET Avanzado, desarrollado por etapas entre mayo y junio de 2025 y revisado después para hashear contraseñas, proteger los endpoints y documentarlo.
